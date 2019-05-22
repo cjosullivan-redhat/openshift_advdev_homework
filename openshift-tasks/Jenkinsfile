@@ -73,17 +73,15 @@ podTemplate(
 
       // Build the OpenShift Image in OpenShift and tag it.
       stage('Build and Tag OpenShift Image') {
-        steps {
           echo "Building OpenShift container image tasks:${devTag}"
 
-          // TBD: Build Image, tag Image
-          script {
-              openshift.withCluster() {
-                  openshift.withProject("${GUID}-tasks-dev") {
-                      openshift.selector("bc", "tasks").startBuild("--from-file=./target/openshift-tasks.war", "--wait=true")
-                      // TBD: Tag the image using the devTag.
-                          openshift.tag("tasks:latest", "tasks:${devTag}")
-                      }
+        // TBD: Build Image, tag Image
+        script {
+            openshift.withCluster() {
+                openshift.withProject("${GUID}-tasks-dev") {
+                    openshift.selector("bc", "tasks").startBuild("--from-file=./target/openshift-tasks.war", "--wait=true")
+                    // TBD: Tag the image using the devTag.
+                        openshift.tag("tasks:latest", "tasks:${devTag}")
                   }
               }
           }
