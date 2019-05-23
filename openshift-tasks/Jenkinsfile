@@ -89,41 +89,6 @@ podTemplate(
         }
       }
 
-      // Deploy the built image to the Development Environment.
-      stage('Deploy to Dev') {
-        echo "Deploying container image to Development Project"
-        script {
-          // Update the Image on the Development Deployment Config
-          openshift.withCluster() {
-                    openshift.withProject("${GUID}-tasks-dev") {
-                        openshift.set("image", "dc/tasks", "tasks=docker-registry.default.svc:5000/${GUID}-tasks-dev/tasks:${devTag}")
-
-                        // Update the Config Map which contains the users for the Tasks application
-                        openshift.selector('configmap', 'tasks-config').delete()
-                        def configmap = openshift.create('configmap', 'tasks-config', '--from-file=./configuration/application-users.properties', '--from-file=./configuration/application-roles.properties')
-
-                        // Deploy the development application.
-                        openshift.selector("dc", "tasks").rollout().latest();
-
-                        // Wait for application to be deployed
-                        def dc = openshift.selector("dc", "tasks").object()
-                        def dc_version = dc.status.latestVersion
-                        def rc = openshift.selector("rc", "tasks-${dc_version}").object()
-
-                        // TBD: Deploy to development Project
-                        //      Set Image, Set VERSION
-                        //      Make sure the application is running and ready before proceeding
-                        
-                        echo "Waiting for ReplicationController tasks-${dc_version} to be ready"
-                        while (rc.spec.replicas != rc.status.readyReplicas) {
-                            sleep 5
-                            rc = openshift.selector("rc", "tasks-${dc_version}").object()
-                        }
-                    }
-                }
-            }
-    }
-
     stage('Deploy to Dev') {
         echo "Deploying container image to Development Project"
         script {
@@ -161,12 +126,12 @@ podTemplate(
         script {
 
             // TBD: Copy image to Nexus container registry
-            sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:admin123 docker://docker-registry.default.svc.cluster.local:5000/${devProject}/tasks:${devTag} docker://nexus-registry.${prefix}-nexus.svc.cluster.local:5000/tasks:${devTag}"
+            sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:admin123 docker://docker-registry.default.svc.cluster.local:5000/${GUID}-tasks-dev/tasks:${devTag} docker://nexus-registry.${prefix}-nexus.svc.cluster.local:5000/tasks:${devTag}"
 
             // TBD: Tag the built image with the production tag.
             openshift.withCluster() {
                 openshift.withProject("${prodProject}") {
-                openshift.tag("${devProject}/tasks:${devTag}", "${devProject}/tasks:${prodTag}")
+                openshift.tag("${GUID}-tasks-dev/tasks:${devTag}", "${GUID}-tasks-dev/tasks:${prodTag}")
                 }
               }
           }
