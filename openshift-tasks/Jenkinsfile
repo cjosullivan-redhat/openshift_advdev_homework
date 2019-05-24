@@ -57,12 +57,13 @@ podTemplate(
         step([$class: 'JUnitResultArchiver', testResults: '**/target/surefire-reports/TEST-*.xml'])
       }
 
-      // // Using Maven to call SonarQube for Code Analysis
-      // stage('Code Analysis') {
-      //   echo "Running Code Analysis"
+      // Using Maven to call SonarQube for Code Analysis
+      stage('Code Analysis') {
+        echo "Running Code Analysis"
 
-      //   // TBD: Execute Sonarqube Tests
-      // }
+        // TBD: Execute Sonarqube Tests
+        sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.gpte-hw-cicd.svc.cluster.local:9000"
+      }
 
       // Publish the built war file to Nexus
       stage('Publish to Nexus') {
