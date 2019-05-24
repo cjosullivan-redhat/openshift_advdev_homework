@@ -204,7 +204,7 @@ podTemplate(
           openshift.withCluster() {
             openshift.withProject("${GUID}-tasks-prod") {
               def route = openshift.selector("route/tasks").object()
-              route.spec.to.name="$(destApp)"
+              route.spec.to.name="${destApp}"
               openshift.apply(route)
             }
           }
