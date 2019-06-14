@@ -32,7 +32,7 @@ podTemplate(
       // Extract version from the pom.xml
       def version = getVersionFromPom("pom.xml")
 
-      // TBD Set the tag for the development image: version + build number
+      // Set the tag for the development image: version + build number
       def devTag  = "${version}-" + currentBuild.number
       // Set the tag for the production image: version
       def prodTag = "${version}"
@@ -41,68 +41,44 @@ podTemplate(
       // Do not run tests in this step
       stage('Build war') {
         echo "Building version ${devTag}"
-
-        // TBD: Execute Maven Build
+        // Execute Maven Build
         sh "${mvnCmd} clean package -DskipTests=true"
       }
-
 
       // TBD: The next two stages should run in parallel
       stage('Code Analysis & Unit Tests') {
         parallel (
-
           "Unit Tests" : {
             echo "Running Unit Tests"
-            // TBD: Execute Unit Tests
+            // Execute Unit Tests
             sh "${mvnCmd} test"
             step([$class: 'JUnitResultArchiver', testResults: '**/target/surefire-reports/TEST-*.xml'])
           },
           // Using Maven to call SonarQube for Code Analysis
           "Code Analysis": {
             echo "Running Code Analysis"
-
-            // TBD: Execute Sonarqube Tests
+            // Execute Sonarqube Tests
             sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.gpte-hw-cicd.svc.cluster.local:9000"
           }
         )
       }
 
-      // // Using Maven run the unit tests
-      // stage('Unit Tests') {
-      //   echo "Running Unit Tests"
-
-      //   // TBD: Execute Unit Tests
-      //   sh "${mvnCmd} test"
-      //   step([$class: 'JUnitResultArchiver', testResults: '**/target/surefire-reports/TEST-*.xml'])
-      // }
-
-      // // Using Maven to call SonarQube for Code Analysis
-      // stage('Code Analysis') {
-      //   echo "Running Code Analysis"
-
-      //   // TBD: Execute Sonarqube Tests
-      //   sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.gpte-hw-cicd.svc.cluster.local:9000"
-      // }
-
       // Publish the built war file to Nexus
       stage('Publish to Nexus') {
         echo "Publish to Nexus"
-
-        // TBD: Publish to Nexus
+        // Publish to Nexus
         sh "${mvnCmd} deploy -DskipTests=true -DaltDeploymentRepository=nexus::default::http://nexus3.gpte-hw-cicd.svc.cluster.local:8081/repository/releases/"
       }
 
       // Build the OpenShift Image in OpenShift and tag it.
       stage('Build and Tag OpenShift Image') {
         echo "Building OpenShift container image tasks:${devTag}"
-
-        // TBD: Build Image, tag Image
+        // Build Image, tag Image
         script {
           openshift.withCluster() {
             openshift.withProject("${GUID}-tasks-dev") {
               openshift.selector("bc", "tasks").startBuild("--from-file=./target/openshift-tasks.war", "--wait=true")
-
-              // TBD: Tag the image using the devTag.
+              // Tag the image using the devTag.
               openshift.tag("tasks:latest", "tasks:${devTag}")
             }
           }
@@ -130,10 +106,19 @@ podTemplate(
                     def dc_version = dc.status.latestVersion
                     def rc = openshift.selector("rc", "tasks-${dc_version}").object()
 
-                    echo "Waiting for ReplicationController tasks-${dc_version} to be ready"
-                    while (rc.spec.replicas != rc.status.readyReplicas) {
+                    echo "Waiting for 'tasks' to appear in the curl response"
+                    def tryAgain = true
+                    def devTasksRoute = ""
+                    while (tryAgain) {
+                      devTasksRoute = sh(returnStdout: true, script: "curl tasks-${GUID}-tasks-dev.apps.${CLUSTER}").trim()
+                      if (devTasksRoute.contains("tasks")) {
+                        echo "*** tasks-dev validated successfully."
+                        tryAgain = false
+                      }
+                      else {
+                        echo "*** tasks-dev returned unexpected name."
                         sleep 5
-                        rc = openshift.selector("rc", "tasks-${dc_version}").object()
+                      }
                     }
                 }
             }
@@ -205,11 +190,6 @@ podTemplate(
                     def dc_prod = openshift.selector("dc", "${destApp}").object()
                     def dc_version = dc_prod.status.latestVersion
                     def rc_prod = openshift.selector("rc", "${destApp}-${dc_version}").object()
-                    echo "Waiting for ${destApp} to be ready"
-                    while (rc_prod.spec.replicas != rc_prod.status.readyReplicas) {
-                        sleep 5
-                        rc_prod = openshift.selector("rc", "${destApp}-${dc_version}").object()
-                    }
                 }
             }
         }
@@ -225,6 +205,21 @@ podTemplate(
               def route = openshift.selector("route/tasks").object()
               route.spec.to.name="${destApp}"
               openshift.apply(route)
+
+              echo "Waiting for '${destApp}' to appear in the curl response"
+              def tryAgain = true
+              def tasksRoute = ""
+              while (tryAgain) {
+                tasksRoute = sh(returnStdout: true, script: "curl tasks-${GUID}-tasks-prod.apps.${CLUSTER}").trim()
+                if (tasksRoute.contains("${destApp}")) {
+                  echo "*** ${destApp} validated successfully."
+                  tryAgain = false
+                }
+                else {
+                  echo "*** ${destApp} returned unexpected name."
+                  sleep 5
+                }
+              }
             }
           }
         }
